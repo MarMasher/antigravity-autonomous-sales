@@ -1,6 +1,8 @@
 # Antigravity — Autonomous Sales Machine
 
 <div align="center">
+<img src="assets/hero_banner.png" alt="Antigravity Hero Banner" width="100%">
+<br><br>
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge)](LICENSE)
