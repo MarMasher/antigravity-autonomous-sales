@@ -1,0 +1,80 @@
+# ── Secrets (NEVER commit these) ─────────────────────────────────────────────
+.env
+.env.local
+.env.production
+.env.development
+*.env
+
+# Google / service account credentials
+drive_creds.json
+drive_creds.json.json
+*.pem
+*.key
+*.p12
+service_account*.json
+credentials*.json
+
+# ── Runtime state (contains scraped PII / outreach history) ──────────────────
+shared_state.json
+
+# ── Logs and artifacts ────────────────────────────────────────────────────────
+logs/
+artifacts/
+*.log
+*.log.*
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+.Python
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.env.bak
+
+# ── Type checker / linter caches ─────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+.ruff_cache/
+.pytype/
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Test artifacts ────────────────────────────────────────────────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# ── Temporary / scratch ───────────────────────────────────────────────────────
+sse_out*.txt
+*.bak
+*.bak[0-9]*
+*.tmp
+graphify-cold-outreach/
+graphify-out/
+
+# ── Node (if any tooling is added) ────────────────────────────────────────────
+node_modules/
+package-lock.json
+yarn.lock
