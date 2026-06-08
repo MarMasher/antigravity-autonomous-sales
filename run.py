@@ -17,8 +17,10 @@ import argparse
 import sys
 
 # Force UTF-8 for Windows console (solves UnicodeEncodeError with emojis)
-sys.stdout.reconfigure(encoding='utf-8')
-sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 import traceback
 from datetime import datetime

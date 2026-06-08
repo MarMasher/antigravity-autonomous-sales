@@ -1,6 +1,6 @@
 """
-NVIDIA API client — DeepSeek V4 Pro, Kimi K2.6, GLM 5.1.
-Hard 45-second timeout per attempt. Auto-fallback across all 3 models.
+Generic LLM API client.
+Hard 45-second timeout per attempt. Auto-fallback across models.
 If all models fail, returns empty string (never raises to caller).
 """
 import os
@@ -12,27 +12,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_URL = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+BASE_URL = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
 TIMEOUT_S = 45   # hard wall-clock timeout per model attempt
 
 MODELS = {
-    "deepseek": {
-        "id":    "deepseek-ai/deepseek-v4-pro",
-        "key":   os.getenv("NVIDIA_DEEPSEEK_KEY"),
-        "extra": {"chat_template_kwargs": {"thinking": False}},
+    "primary": {
+        "id":    os.getenv("LLM_MODEL_PRIMARY", "gpt-4o-mini"),
+        "key":   os.getenv("LLM_API_KEY"),
+        "extra": {},
         "kind":  "openai",
     },
-    "kimi": {
-        "id":  "moonshotai/kimi-k2.6",
-        "key": os.getenv("NVIDIA_KIMI_KEY"),
-        "kind": "kimi",
-    },
-    "glm": {
-        "id":    "z-ai/glm-5.1",
-        "key":   os.getenv("NVIDIA_GLM_KEY"),
-        "extra": {"chat_template_kwargs": {"enable_thinking": True, "clear_thinking": False}},
-        "kind":  "openai",
-    },
+    "fallback": {
+        "id":  os.getenv("LLM_MODEL_FALLBACK", "gpt-4o"),
+        "key": os.getenv("LLM_API_KEY"),
+        "extra": {},
+        "kind": "openai",
+    }
 }
 
 
@@ -85,17 +80,20 @@ def _call_kimi(cfg: dict, prompt: str, system: str, temperature: float, max_toke
     return resp.json()["choices"][0]["message"]["content"]
 
 
-class NvidiaClient:
+class LLMClient:
     """
-    Unified NVIDIA client with:
-    - 45-second hard timeout per attempt (won't hang for minutes)
-    - Automatic fallback across DeepSeek → Kimi → GLM
+    Unified LLM client with:
+    - 45-second hard timeout per attempt
+    - Automatic fallback across primary → fallback models
     - Returns "" if all models fail (never crashes the pipeline)
     """
 
-    def __init__(self, model: str = "deepseek"):
-        if model not in MODELS:
-            raise ValueError(f"Unknown model: {model}. Choose: {list(MODELS)}")
+    def __init__(self, model: str = "primary"):
+        if model not in MODELS and model not in ["deepseek", "glm"]: # compat for older codebase
+            # Default to primary if a legacy name is passed
+            model = "primary"
+        elif model in ["deepseek", "glm"]:
+            model = "primary"
         self.preferred = model
 
     def complete(
@@ -112,20 +110,20 @@ class NvidiaClient:
             cfg = MODELS[name]
             fn  = _call_kimi if cfg["kind"] == "kimi" else _call_openai
             executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-            print(f"[NvidiaClient] Trying {name}…")
+            print(f"[LLMClient] Trying {name}…")
             try:
                 future = executor.submit(fn, cfg, prompt, system, temperature, max_tokens)
                 result = future.result(timeout=TIMEOUT_S + 5)  # ThreadPoolExecutor timeout
                 if result and result.strip():
-                    print(f"[NvidiaClient] ✓ {name} responded ({len(result)} chars)")
+                    print(f"[LLMClient] ✓ {name} responded ({len(result)} chars)")
                     return result
             except concurrent.futures.TimeoutError:
-                print(f"[NvidiaClient] ✗ {name} timed out after {TIMEOUT_S}s — trying fallback…")
+                print(f"[LLMClient] ✗ {name} timed out after {TIMEOUT_S}s — trying fallback…")
             except Exception as e:
-                print(f"[NvidiaClient] ✗ {name} error: {type(e).__name__}: {str(e)[:80]} — trying fallback…")
+                print(f"[LLMClient] ✗ {name} error: {type(e).__name__}: {str(e)[:80]} — trying fallback…")
             finally:
                 executor.shutdown(wait=False)
             time.sleep(1)
 
-        print("[NvidiaClient] All models failed — returning empty string")
+        print("[LLMClient] All models failed — returning empty string")
         return ""

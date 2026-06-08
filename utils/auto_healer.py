@@ -29,32 +29,24 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_URL       = "https://integrate.api.nvidia.com/v1"
+BASE_URL       = os.getenv("LLM_BASE_URL", "https://api.openai.com/v1")
 MAX_RETRIES    = 3
 HEAL_TIMEOUT   = 60   # seconds per AI heal call
 
 # Use GLM (best reasoning) → Kimi → DeepSeek for healing
 HEALER_MODELS = [
     {
-        "name": "glm",
-        "id":   "z-ai/glm-5.1",
-        "key":  os.getenv("NVIDIA_GLM_KEY"),
+        "name": "primary",
+        "id":   os.getenv("LLM_MODEL_PRIMARY", "gpt-4o-mini"),
+        "key":  os.getenv("LLM_API_KEY"),
         "kind": "openai",
-        "extra": {"chat_template_kwargs": {"enable_thinking": True, "clear_thinking": True}},
     },
     {
-        "name": "kimi",
-        "id":   "moonshotai/kimi-k2.6",
-        "key":  os.getenv("NVIDIA_KIMI_KEY"),
-        "kind": "kimi",
-    },
-    {
-        "name": "deepseek",
-        "id":   "deepseek-ai/deepseek-v4-pro",
-        "key":  os.getenv("NVIDIA_DEEPSEEK_KEY"),
+        "name": "fallback",
+        "id":   os.getenv("LLM_MODEL_FALLBACK", "gpt-4o"),
+        "key":  os.getenv("LLM_API_KEY"),
         "kind": "openai",
-        "extra": {"chat_template_kwargs": {"thinking": False}},
-    },
+    }
 ]
 
 HEAL_SYSTEM = """You are an expert Python auto-healing system.

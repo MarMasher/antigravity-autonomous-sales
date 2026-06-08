@@ -22,8 +22,10 @@ from pathlib import Path
 from datetime import datetime
 
 # Force UTF-8 for Windows console (solves UnicodeEncodeError with emojis)
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 # ── Logging setup ──────────────────────────────────────────────────────────────
 LOG_DIR = Path(__file__).parent / "logs"
@@ -149,7 +151,10 @@ def run_cycle(cycle_num: int) -> dict:
     seen_urls: set[str] = set()
     scored_targets: list[dict] = []
 
+    import uuid
     for lead in raw_leads:
+        if not lead.get("id"):
+            lead["id"] = str(uuid.uuid4())
         url = (lead.get("url") or "").rstrip("/")
         if url and url not in seen_urls:
             seen_urls.add(url)
@@ -158,6 +163,8 @@ def run_cycle(cycle_num: int) -> dict:
     for t in researcher_targets:
         if len(scored_targets) >= MAX_TARGETS:
             break
+        if not t.get("id"):
+            t["id"] = str(uuid.uuid4())
         url = (t.get("url") or "").rstrip("/")
         if url and url not in seen_urls:
             seen_urls.add(url)
@@ -198,22 +205,69 @@ def run_cycle(cycle_num: int) -> dict:
 
         # 3b. Send the Humanized Video Template for each target
         from utils.email_sender import send_video_outreach_email
-        from utils.nvidia_client import NvidiaClient
-        llm = NvidiaClient()
+        from utils.llm_client import LLMClient
+        try:
+            llm = LLMClient()
+        except Exception:
+            log.exception("  [phase3] Failed to initialize LLMClient — falling back to empty icebreaker/linkedin_msg")
+            llm = None
 
         for t in scored_targets:
             biz = t.get("business_name", t.get("title", "this business"))
-            niche = t.get("niche", "business")
+            lead_niche = t.get("niche", "business")
             loc = t.get("location", "your area")
             
             if not t.get("icebreaker"):
-                prompt = f"Write a 1-sentence personalized cold email opener (icebreaker) for a {niche} in {loc} named {biz}. Just the sentence, no quotes, no 'Hi name', sound natural."
-                t["icebreaker"] = llm.complete(prompt, temperature=0.7).strip(' "')
+                if llm:
+                    try:
+                        prompt = f"Write a 1-sentence personalized cold email opener (icebreaker) for a {lead_niche} in {loc} named {biz}. Just the sentence, no quotes, no 'Hi name', sound natural."
+                        t["icebreaker"] = llm.complete(prompt, temperature=0.7).strip(' "')
+                    except Exception:
+                        log.exception(f"  [phase3] Failed to generate icebreaker for {biz}")
+                        t["icebreaker"] = ""
+                else:
+                    t["icebreaker"] = ""
                 
             if not t.get("linkedin_msg"):
-                prompt = f"Write a casual 2-sentence LinkedIn connection request message (under 300 chars) for the owner of {biz}. Mention you recorded a quick 45-sec video showing how to fix a leak on their mobile site. No quotes, no placeholders."
-                t["linkedin_msg"] = llm.complete(prompt, temperature=0.7).strip(' "')
+                if llm:
+                    try:
+                        prompt = f"Write a casual 2-sentence LinkedIn connection request message (under 300 chars) for the owner of {biz}. Mention you recorded a quick 45-sec video showing how to fix a leak on their mobile site. No quotes, no placeholders."
+                        t["linkedin_msg"] = llm.complete(prompt, temperature=0.7).strip(' "')
+                    except Exception:
+                        log.exception(f"  [phase3] Failed to generate linkedin_msg for {biz}")
+                        t["linkedin_msg"] = ""
+                else:
+                    t["linkedin_msg"] = ""
 
+        # --- NEW: SUPERVISOR PHASE ---
+        from agents.supervisor import SupervisorAgent
+        supervisor = SupervisorAgent()
+        try:
+            log.info("  [phase3] Running Supervisor checks...")
+            supervised_res = supervisor.run_safe(
+                max_retries=1,
+                targets=scored_targets,
+                video_results=video_results
+            )
+            if supervised_res:
+                scored_targets = supervised_res.get("targets", scored_targets)
+                video_results = supervised_res.get("video_results", video_results)
+        except Exception:
+            log.exception("  [phase3] SupervisorAgent failed — proceeding with raw data")
+
+        # Re-tally videos in case Supervisor re-recorded any
+        videos_recorded = sum(
+            1 for v in video_results.values()
+            if v.get("path") and not v.get("error")
+        )
+        log.info(f"  Final Videos recorded: {videos_recorded}/{len(scored_targets)}")
+
+        # Update state with any new supervisor video results
+        _st = read_state()
+        _st.setdefault("video_audits", {}).update(video_results)
+        write_state(_st)
+
+        for t in scored_targets:
             tid = t.get("id") or ""
             audit_meta = video_results.get(tid, {})
             video_path = audit_meta.get("path")

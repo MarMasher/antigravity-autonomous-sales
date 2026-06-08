@@ -36,9 +36,6 @@ from utils.state_manager import read_state, write_state
 
 log = logging.getLogger("antigravity.reply_processor")
 
-_SENDER_NAME   = os.getenv("SENDER_NAME", "Your Name")
-_SENDER_HANDLE = os.getenv("SENDER_HANDLE", "@your-handle")
-
 # ── Intent patterns ───────────────────────────────────────────────────────────
 
 _YES_PATTERNS = re.compile(
@@ -86,7 +83,7 @@ def _reply_yes(biz_name: str) -> tuple[str, str]:
         Want me to put together a full mockup so you can see exactly what it
         would look like before committing to anything?
 
-        — {_SENDER_NAME} | {_SENDER_HANDLE}
+        — {SENDER_NAME} | {SENDER_HANDLE}
     """).strip()
     return subject, body
 
@@ -111,7 +108,7 @@ def _reply_price(biz_name: str) -> tuple[str, str]:
         Want me to put together a free mockup for {biz_name} first?
         You'd see the full design before agreeing to anything.
 
-        — {_SENDER_NAME} | {_SENDER_HANDLE}
+        — {SENDER_NAME} | {SENDER_HANDLE}
     """).strip()
     return subject, body
 
@@ -127,7 +124,7 @@ def _reply_no(biz_name: str) -> tuple[str, str]:
         If you ever do want to look at your website in the future,
         you know where to find me.
 
-        — {_SENDER_NAME} | {_SENDER_HANDLE}
+        — {SENDER_NAME} | {SENDER_HANDLE}
     """).strip()
     return subject, body
 
@@ -167,7 +164,7 @@ def _build_yes_email(biz_name: str, to_email: str, from_email: str) -> MIMEMulti
 
     msg = MIMEMultipart("mixed")
     msg["Subject"]  = subject
-    msg["From"]     = f"{_SENDER_NAME} <{from_email}>"
+    msg["From"]     = f"{SENDER_NAME} <{from_email}>"
     msg["To"]       = to_email
     msg["Reply-To"] = from_email
 
@@ -298,10 +295,7 @@ def _classify_intent(body: str) -> tuple[str, str]:
     text = (body or "").strip()
 
     import json
-    from utils.nvidia_client import NvidiaClient
-    llm = NvidiaClient()
-    
-    prompt = f"""You are a freelance web designer. You sent a cold email with a video audit of their mobile website.
+    prompt = f"""You are the salesperson, a web developer. You sent a cold email with a video audit of their mobile website.
 Read the lead's reply below and determine their intent. 
 If they want to book a call or are interested, draft a natural reply asking what day/time works best for a 10-minute chat (do not use Calendly).
 If they ask for price, state it is a $1,500 flat fee and ask for a time to chat.
@@ -315,9 +309,18 @@ Return EXACTLY a JSON object with two keys:
 - "reply_body": "The exact plain text email reply to send to them."
 """
     try:
+        from utils.llm_client import LLMClient
+        llm = LLMClient()
         response = llm.complete(prompt, temperature=0.2)
         # basic cleanup if the model wraps in markdown
-        response = response.strip().strip("```json").strip("```").strip()
+        response = response.strip()
+        if response.startswith("```json"):
+            response = response[7:]
+        if response.startswith("```"):
+            response = response[3:]
+        if response.endswith("```"):
+            response = response[:-3]
+        response = response.strip()
         data = json.loads(response)
         return data.get("intent", "unknown"), data.get("reply_body", "")
     except Exception as e:
@@ -342,7 +345,7 @@ def _send_reply(
             # For yes, we build a multipart to attach the CSS snippet
             msg = MIMEMultipart("mixed")
             msg["Subject"]  = f"Re: {biz_name} mobile site"
-            msg["From"]     = f"{_SENDER_NAME} <{from_email}>"
+            msg["From"]     = f"{SENDER_NAME} <{from_email}>"
             msg["To"]       = to_email
             msg["Reply-To"] = from_email
 
@@ -362,7 +365,7 @@ def _send_reply(
         elif intent in ("price", "no", "question"):
             msg = MIMEMultipart("alternative")
             msg["Subject"]  = f"Re: {biz_name} mobile site"
-            msg["From"]     = f"{_SENDER_NAME} <{from_email}>"
+            msg["From"]     = f"{SENDER_NAME} <{from_email}>"
             msg["To"]       = to_email
             msg["Reply-To"] = from_email
             msg.attach(MIMEText(ai_body, "plain"))

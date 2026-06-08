@@ -28,7 +28,7 @@ Antigravity runs a 5-agent pipeline, every 24 hours, on autopilot:
 | 4 | **Reply Processor** | Reads your Gmail inbox, classifies replies (YES / PRICE / NO), and auto-responds to close the conversation. |
 | 5 | **Negotiator** | Given the owner's reply, generates the optimal negotiation response with reasoning and next steps. |
 
-**Self-healing:** If any agent crashes, AutoHealer identifies the failing file, sends it to an AI model for a fix, patches the file, reloads the module, and retries — all without human intervention.
+**Self-healing:** If any agent crashes, AutoHealer identifies the failing file, sends it to an LLM for a fix, patches the file, reloads the module, and retries — all without human intervention.
 
 ---
 
@@ -91,7 +91,7 @@ daemon.py  ←  orchestrates all agents in sequence, every 24h
     ├── utils/email_sender.py      (Gmail SMTP outreach)
     ├── utils/reply_processor.py   (Gmail IMAP + auto-reply)
     ├── utils/auto_healer.py       (Self-healing via AI patch loop)
-    ├── utils/nvidia_client.py     (NVIDIA NIM AI client)
+    ├── utils/llm_client.py        (Generic OpenAI-compatible AI client)
     ├── utils/github_client.py     (GitHub API for demo repos)
     └── utils/state_manager.py     (Persistent JSON state)
 ```
@@ -108,9 +108,10 @@ Copy `.env.example` to `.env` and configure:
 
 | Variable | Description |
 |----------|-------------|
-| `NVIDIA_GLM_KEY` | NVIDIA NIM API key for GLM 5.1 (primary AI) |
-| `NVIDIA_KIMI_KEY` | NVIDIA NIM API key for Kimi K2 (fallback) |
-| `NVIDIA_DEEPSEEK_KEY` | NVIDIA NIM API key for DeepSeek V4 (fallback) |
+| `LLM_API_KEY` | Your AI provider API key (OpenAI, Anthropic, Groq, local, etc) |
+| `LLM_BASE_URL` | Base URL for OpenAI-compatible endpoint (e.g. `https://api.openai.com/v1`) |
+| `LLM_MODEL_PRIMARY` | Primary model ID (e.g. `gpt-4o-mini`, `llama3-70b`) |
+| `LLM_MODEL_FALLBACK` | Fallback model ID in case of rate limits |
 | `EMAIL_FROM` | Your Gmail address |
 | `GMAIL_APP_PASSWORD` | Gmail App Password ([how to get one](https://support.google.com/accounts/answer/185833)) |
 | `EMAIL_TO` | Your email for receiving lead dossiers |
@@ -165,7 +166,7 @@ python orchestrator.py negotiate
 ### AutoHealer
 Wraps every agent call. On crash:
 1. Identifies the failing source file from the traceback
-2. Reads the file and sends it to GLM 5.1 → Kimi → DeepSeek with the error
+2. Reads the file and sends it to your configured LLM models with the error
 3. AI returns the complete fixed file
 4. Validates it compiles (AST parse)
 5. Backs up original, patches, reloads the module

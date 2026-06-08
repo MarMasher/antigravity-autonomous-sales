@@ -21,6 +21,7 @@ Output per target:
 import os
 import re
 import time
+import shutil
 import logging
 import hashlib
 from pathlib import Path
@@ -115,7 +116,16 @@ class VideoAuditorAgent(BaseAgent):
         from playwright.sync_api import sync_playwright
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(headless=True)
+            # FIX: Windows-compatible headless args prevent Playwright crashes
+            browser = pw.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-gpu",
+                    "--disable-setuid-sandbox",
+                ],
+            )
             context = browser.new_context(
                 viewport={"width": 375, "height": 812},
                 user_agent=(
@@ -165,25 +175,44 @@ class VideoAuditorAgent(BaseAgent):
                 browser.close()
 
             # Playwright saves video with a generated name — find and rename it
-            raw_video = _find_newest_webm(ARTIFACTS_DIR)
-            if raw_video and raw_video != video_path:
-                raw_video.rename(video_path)
+            # FIX: use shutil.move instead of .rename() — works across Windows drives
+            # and overwrites any stale file from a prior run
+            raw_video = _find_newest_webm(ARTIFACTS_DIR, exclude=video_path)
+            if raw_video:
+                if video_path.exists():
+                    video_path.unlink()  # remove stale target before move
+                shutil.move(str(raw_video), str(video_path))
 
         # Determine if upload needed
         public_url = None
+        # Track which path to report even after local deletion
+        final_path: str | None = None
+
         if video_path.exists():
+            final_path = str(video_path)
             log.info(f"[video] Uploading video to Drive (cloud-only mode)…")
             public_url = _upload_to_drive(video_path)
-            
-            # Delete local file to save space if upload succeeded
+
+            # FIX: delete local ONLY after saving public_url — then report shot fallback path
             if public_url:
                 try:
                     video_path.unlink()
                     log.info(f"[video] Deleted local copy: {video_path.name}")
                 except Exception:
                     pass
-        elif shot_path.exists():
-            log.info("[video] No video recorded — using screenshot fallback")
+                # After deletion: if we have a public_url the video IS available (on Drive)
+                # Keep final_path as the original path for reference but mark uploaded
+                return {
+                    "target_id":   tid,
+                    "path":        final_path,   # original local path (now deleted)
+                    "public_url":  public_url,
+                    "recorded_at": recorded_at,
+                    "fallback":    False,
+                    "uploaded":    True,
+                }
+
+        if shot_path.exists():
+            log.info("[video] No video recorded (or upload failed) — using screenshot fallback")
             return {
                 "target_id":   tid,
                 "path":        str(shot_path),
@@ -192,12 +221,13 @@ class VideoAuditorAgent(BaseAgent):
                 "fallback":    True,
             }
 
+        # Video exists locally but no Drive upload — return it
         return {
             "target_id":   tid,
-            "path":        str(video_path) if video_path.exists() else str(shot_path),
-            "public_url":  public_url,
+            "path":        final_path or str(video_path),
+            "public_url":  None,
             "recorded_at": recorded_at,
-            "fallback":    not video_path.exists(),
+            "fallback":    False,
         }
 
     def _requests_screenshot(
@@ -301,9 +331,9 @@ def _slug(text: str) -> str:
     return s[:40].strip("_") or hashlib.md5(text.encode()).hexdigest()[:8]
 
 
-def _find_newest_webm(directory: Path) -> Path | None:
+def _find_newest_webm(directory: Path, exclude: Path | None = None) -> Path | None:
     """Find the most recently modified .webm file in a directory."""
-    webms = list(directory.glob("*.webm"))
+    webms = [p for p in directory.glob("*.webm") if exclude is None or p.name != exclude.name]
     if not webms:
         return None
     return max(webms, key=lambda p: p.stat().st_mtime)

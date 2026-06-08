@@ -1,14 +1,10 @@
 """
 Agent 5 — The Negotiator
-Paste in the owner's reply → gets the optimal negotiation response instantly.
+{SENDER_NAME} pastes in the owner's reply → gets the optimal negotiation response instantly.
 """
 from rich.console import Console
 from agents.base_agent import BaseAgent
-from utils.nvidia_client import NvidiaClient
-
-import os
-SENDER_HANDLE = os.getenv("SENDER_HANDLE", "@your-handle")
-SENDER_NAME   = os.getenv("SENDER_NAME", "you")
+from utils.llm_client import LLMClient
 
 console = Console()
 
@@ -23,7 +19,11 @@ class NegotiatorAgent(BaseAgent):
     agent_id = "negotiator"
 
     def __init__(self, model: str = "deepseek"):
-        self.ai = NvidiaClient(model)
+        try:
+            self.ai = LLMClient(model)
+        except Exception as e:
+            console.print(f"[red]Failed to initialize LLMClient: {e}[/red]")
+            self.ai = None
 
     def run(self, owner_message: str, target_id: str | None = None, **kwargs):
         state   = self.state()
@@ -57,7 +57,14 @@ Then generate:
 
 Format clearly with those 4 headers.
 """
-        response = self.ai.complete(prompt, system=SYSTEM_PROMPT, temperature=0.6, max_tokens=600)
+        try:
+            if self.ai:
+                response = self.ai.complete(prompt, system=SYSTEM_PROMPT, temperature=0.6, max_tokens=600)
+            else:
+                response = "Error: LLM client not initialized."
+        except Exception as e:
+            console.print(f"[red]LLM completion failed: {e}[/red]")
+            response = "Error: Failed to generate response from LLM."
 
         console.print(response)
         self.log("response_generated", {"target": biz})

@@ -4,7 +4,7 @@ Generates human DM scripts + full objection-handling tree for the salesperson to
 """
 from rich.console import Console
 from agents.base_agent import BaseAgent
-from utils.nvidia_client import NvidiaClient
+from utils.llm_client import LLMClient
 from utils.state_manager import update_outreach
 
 console = Console()
@@ -18,7 +18,7 @@ class OutreachAgent(BaseAgent):
     agent_id = "outreach"
 
     def __init__(self, model: str = "deepseek"):
-        self.ai = NvidiaClient(model)
+        self.ai = LLMClient(model)
 
     def run(self, target_id: str | None = None, **kwargs):
         state    = self.state()

@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from agents.base_agent import BaseAgent
-from utils.nvidia_client import NvidiaClient
+from utils.llm_client import LLMClient
 from utils.web_search import search_businesses, audit_website, scrape_contacts
 from utils.email_sender import send_dossier_email, send_outreach_emails
 
@@ -155,7 +155,7 @@ class ResearcherAgent(BaseAgent):
     agent_id = "researcher"
 
     def __init__(self, model: str = "deepseek"):
-        self.ai = NvidiaClient(model)
+        self.ai = LLMClient(model)
 
     # ─────────────────────────────────────────────────────────────────────────
 
