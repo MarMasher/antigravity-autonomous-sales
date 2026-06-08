@@ -18,15 +18,18 @@
 
 ## What It Does
 
-Antigravity runs a 5-agent pipeline, every 24 hours, on autopilot:
+Antigravity runs an advanced 8-agent pipeline, orchestrated autonomously:
 
 | Step | Agent | What happens |
 |------|-------|-------------|
-| 1 | **Researcher** | Sweeps 70+ niches × 150+ cities. Scrapes contacts, audits websites, scores leads by buyer quality × website pain. |
-| 2 | **Builder** | Generates a live demo site (Puter.js, deployed to Vercel/GitHub Pages) personalized to the lead's business. |
-| 3 | **Outreach** | Writes a human-sounding cold DM + full objection-handling tree, ready to copy-paste. |
-| 4 | **Reply Processor** | Reads your Gmail inbox, classifies replies (YES / PRICE / NO), and auto-responds to close the conversation. |
-| 5 | **Negotiator** | Given the owner's reply, generates the optimal negotiation response with reasoning and next steps. |
+| 1 | **Supervisor** | The core orchestrator. Plans the execution sequence and coordinates data hand-offs between specialized agents. |
+| 2 | **Apify Lead Agent** | Leverages Apify to scrape mapping data and rapidly aggregate massive lists of high-intent local business leads. |
+| 3 | **Researcher** | Sweeps niches/cities, scrapes contacts, audits websites, and scores leads by buyer quality and website pain. |
+| 4 | **Video Auditor** | Generates an automated, personalized Loom-style video teardown of the lead's website with voiceover logic. |
+| 5 | **Builder** | Generates a live demo site (deployed to Vercel/GitHub Pages) perfectly personalized to the lead's business. |
+| 6 | **Outreach** | Writes a human-sounding cold DM/email linking the video teardown and demo site, ready to send. |
+| 7 | **Reply Processor** | Reads your Gmail inbox, classifies inbound replies (YES / PRICE / NO), and auto-responds to keep the deal warm. |
+| 8 | **Negotiator** | Given the owner's reply, generates the optimal negotiation response with pricing, reasoning, and next steps. |
 
 **Self-healing:** If any agent crashes, AutoHealer identifies the failing file, sends it to an LLM for a fix, patches the file, reloads the module, and retries — all without human intervention.
 
