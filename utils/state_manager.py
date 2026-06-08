@@ -42,20 +42,25 @@ def read_state() -> dict:
     with FileLock(str(LOCK_FILE)):
         if not STATE_FILE.exists():
             state = _default_state()
-            STATE_FILE.write_text(json.dumps(state, indent=2))
+            _atomic_write(state)
             return state
         try:
             return json.loads(STATE_FILE.read_text())
         except json.JSONDecodeError as e:
             print(f"[StateManager] Warning: state file corrupted ({e}). Resetting to default.")
             state = _default_state()
-            STATE_FILE.write_text(json.dumps(state, indent=2))
+            _atomic_write(state)
             return state
 
+def _atomic_write(state: dict) -> None:
+    """Helper to write state atomically using a temporary file."""
+    tmp = STATE_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    tmp.replace(STATE_FILE)
 
 def write_state(state: dict) -> None:
     with FileLock(str(LOCK_FILE)):
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 # ── Helpers ───────────────────────────────────────────────────────
@@ -73,7 +78,7 @@ def log_action(agent_id: str, action: str, data: dict | None = None) -> None:
             "action":    action,
             "data":      data or {},
         })
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 def add_target(target: dict) -> None:
@@ -82,7 +87,7 @@ def add_target(target: dict) -> None:
         if "id" not in target:
             target["id"] = str(uuid.uuid4())
         state["targets"].append(target)
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 def set_active_target(target_id: str) -> None:
@@ -90,21 +95,21 @@ def set_active_target(target_id: str) -> None:
         state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else _default_state()
         matches = [t for t in state["targets"] if t.get("id") == target_id]
         state["active_target"] = matches[0] if matches else {}
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 def update_build(target_id: str, build_data: dict) -> None:
     with FileLock(str(LOCK_FILE)):
         state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else _default_state()
         state["builds"][target_id] = build_data
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 def update_outreach(target_id: str, outreach_data: dict) -> None:
     with FileLock(str(LOCK_FILE)):
         state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else _default_state()
         state["outreach"][target_id] = outreach_data
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        _atomic_write(state)
 
 
 # Keys that survive a safe-wipe — never lose outreach history or conversations

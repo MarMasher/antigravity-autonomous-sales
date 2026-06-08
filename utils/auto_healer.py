@@ -237,8 +237,10 @@ def heal_and_retry(
                     backup.write_text(original, encoding="utf-8")
                     print(f"[AutoHealer] Backed up original → {backup.name}")
 
-                    # Write the fix
-                    fpath.write_text(fixed, encoding="utf-8")
+                    # Write the fix atomically
+                    tmp_path = fpath.with_suffix(".tmp")
+                    tmp_path.write_text(fixed, encoding="utf-8")
+                    tmp_path.replace(fpath)
                     print(f"[AutoHealer] ✓ Patched {fpath.name}")
 
                     # Reload the affected module

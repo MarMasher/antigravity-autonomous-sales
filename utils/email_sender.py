@@ -1265,7 +1265,7 @@ def send_video_outreach_email(
 
 def process_followups():
     import os
-    from datetime import datetime
+    from datetime import datetime, timezone
     from utils.state_manager import read_state, write_state
 
     app_password = os.getenv("GMAIL_APP_PASSWORD", "")
@@ -1280,15 +1280,15 @@ def process_followups():
     if not meta:
         return
         
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     to_update = []
     sent_count = 0
     
     for m in meta:
         try:
             sent_at = datetime.fromisoformat(m["sent_at"].replace("Z", "+00:00"))
-            if sent_at.tzinfo is not None:
-                sent_at = sent_at.replace(tzinfo=None)
+            if sent_at.tzinfo is None:
+                sent_at = sent_at.replace(tzinfo=timezone.utc)
         except Exception:
             continue
         days_since = (now - sent_at).days
