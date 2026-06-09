@@ -1225,16 +1225,12 @@ def send_video_outreach_email(
     msg["From"]     = f"{SENDER_NAME} <{email_from}>"
     msg["To"]       = to_email
     msg["Reply-To"] = email_from
-    if email_to_bcc:
-        msg["Bcc"] = email_to_bcc
 
     msg.attach(MIMEText(plain, "plain"))
     msg.attach(MIMEText(body_html, "html"))
 
     try:
         recipients = [to_email]
-        if email_to_bcc:
-            recipients.append(email_to_bcc)
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
             smtp.login(email_from, app_password)
