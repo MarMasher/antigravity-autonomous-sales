@@ -30,7 +30,6 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email import encoders
-from pathlib import Path
 
 from utils.state_manager import read_state, write_state
 

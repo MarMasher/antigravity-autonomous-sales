@@ -541,10 +541,6 @@ def send_dossier_email(targets: list[dict]) -> bool:
 #  AUTONOMOUS OUTREACH — sends cold emails directly to each critical lead
 # ══════════════════════════════════════════════════════════════════════════════
 
-import random as _random
-import time   as _time
-
-
 import hashlib as _hashlib
 
 def _stable_hash(s: str) -> int:
