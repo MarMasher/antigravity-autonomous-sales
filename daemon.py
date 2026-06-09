@@ -33,13 +33,21 @@ LOG_DIR.mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
     handlers=[
         logging.FileHandler(LOG_DIR / "daemon.log", encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )
 log = logging.getLogger("antigravity")
+
+# Silence noisy third-party loggers
+logging.getLogger("duckduckgo_search").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("WDM").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 INTERVAL_HOURS = 24
@@ -205,12 +213,6 @@ def run_cycle(cycle_num: int) -> dict:
 
         # 3b. Send the Humanized Video Template for each target
         from utils.email_sender import send_video_outreach_email
-        from utils.llm_client import LLMClient
-        try:
-            llm = LLMClient()
-        except Exception:
-            log.exception("  [phase3] Failed to initialize LLMClient — falling back to empty icebreaker/linkedin_msg")
-            llm = None
 
         for t in scored_targets:
             biz = t.get("business_name", t.get("title", "this business"))
@@ -218,26 +220,10 @@ def run_cycle(cycle_num: int) -> dict:
             loc = t.get("location", "your area")
             
             if not t.get("icebreaker"):
-                if llm:
-                    try:
-                        prompt = f"Write a 1-sentence personalized cold email opener (icebreaker) for a {lead_niche} in {loc} named {biz}. Just the sentence, no quotes, no 'Hi name', sound natural."
-                        t["icebreaker"] = llm.complete(prompt, temperature=0.7).strip(' "')
-                    except Exception:
-                        log.exception(f"  [phase3] Failed to generate icebreaker for {biz}")
-                        t["icebreaker"] = ""
-                else:
-                    t["icebreaker"] = ""
+                t["icebreaker"] = ""
                 
             if not t.get("linkedin_msg"):
-                if llm:
-                    try:
-                        prompt = f"Write a casual 2-sentence LinkedIn connection request message (under 300 chars) for the owner of {biz}. Mention you recorded a quick 45-sec video showing how to fix a leak on their mobile site. No quotes, no placeholders."
-                        t["linkedin_msg"] = llm.complete(prompt, temperature=0.7).strip(' "')
-                    except Exception:
-                        log.exception(f"  [phase3] Failed to generate linkedin_msg for {biz}")
-                        t["linkedin_msg"] = ""
-                else:
-                    t["linkedin_msg"] = ""
+                t["linkedin_msg"] = ""
 
         # --- NEW: SUPERVISOR PHASE ---
         from agents.supervisor import SupervisorAgent
@@ -284,6 +270,14 @@ def run_cycle(cycle_num: int) -> dict:
                 emails_sent += 1
 
         log.info(f"  Emails sent: {emails_sent}/{len(scored_targets)}")
+        
+        # Send one consolidated dossier email to the user
+        from utils.email_sender import send_dossier_email
+        try:
+            log.info("  Sending consolidated dossier email to user...")
+            _safe_call(send_dossier_email, "consolidated_dossier", scored_targets)
+        except Exception:
+            log.exception("  Failed to send consolidated dossier email")
 
     # ── Phase 4: Follow-ups + Autonomous Reply Closer ─────────────────────────
     _phase_header(4, "Follow-ups + Reply Closer")

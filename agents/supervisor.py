@@ -8,7 +8,6 @@ Re-triggers generation or recording if missing/failed.
 import logging
 from agents.base_agent import BaseAgent
 from agents.video_auditor import VideoAuditorAgent
-from utils.llm_client import LLMClient
 
 log = logging.getLogger("antigravity.supervisor")
 
@@ -23,11 +22,6 @@ class SupervisorAgent(BaseAgent):
         2. Ensure email fields (icebreaker, linkedin_msg) are present and quality.
         Returns the updated targets and video_results.
         """
-        try:
-            llm = LLMClient()
-        except Exception as e:
-            log.error(f"[supervisor] Failed to initialize LLMClient: {e}")
-            llm = None
         updated_targets = []
         
         for t in targets:
@@ -64,7 +58,8 @@ class SupervisorAgent(BaseAgent):
             bad_patterns = ["language model", "AI", "I cannot", "As an", "Here is"]
             
             def is_bad(text):
-                if not text or len(text) < 10:
+                # Added length constraints to prevent repetitive glitches
+                if not text or len(text) < 10 or len(text) > 150:
                     return True
                 for bp in bad_patterns:
                     if bp.lower() in text.lower():
@@ -73,37 +68,11 @@ class SupervisorAgent(BaseAgent):
 
             if is_bad(icebreaker):
                 log.warning(f"[supervisor] Fixing bad icebreaker for {biz}")
-                prompt = f"Write a single, highly realistic and short 1-sentence personalized cold email opener for a {lead_niche} in {loc} named {biz}. Do not use quotes or placeholder text. Just the sentence."
-                if llm:
-                    try:
-                        t["icebreaker"] = llm.complete(prompt, temperature=0.7).strip(' "')
-                    except Exception as e:
-                        log.error(f"[supervisor] LLM complete failed for icebreaker: {e}")
-                        t["icebreaker"] = f"I was researching {lead_niche} businesses in {loc} and {biz} stood out to me."
-                else:
-                    t["icebreaker"] = f"I was researching {lead_niche} businesses in {loc} and {biz} stood out to me."
+                t["icebreaker"] = f"I was researching {lead_niche} businesses in {loc} and {biz} stood out to me."
                 
-            if is_bad(linkedin_msg):
+            if is_bad(linkedin_msg) or len(linkedin_msg) > 300:
                 log.warning(f"[supervisor] Fixing bad linkedin_msg for {biz}")
-                prompt = f"Write a 2-sentence LinkedIn connection request (under 300 chars) for the owner of {biz}. Mention you made a 45s video on their mobile site. No quotes, no placeholders."
-                if llm:
-                    try:
-                        t["linkedin_msg"] = llm.complete(prompt, temperature=0.7).strip(' "')
-                    except Exception as e:
-                        log.error(f"[supervisor] LLM complete failed for linkedin_msg: {e}")
-                        t["linkedin_msg"] = f"Hi, I recently reviewed {biz}'s website and made a quick 45s video on how to improve its mobile conversions. Let me know if you'd like to see it."
-                else:
-                    t["linkedin_msg"] = f"Hi, I recently reviewed {biz}'s website and made a quick 45s video on how to improve its mobile conversions. Let me know if you'd like to see it."
-                
-            # Secondary check
-            if llm:
-                check_prompt = f"Does this text look like a robotic AI apology or contains placeholders? Text: '{t['icebreaker']}'. Reply YES if it's robotic/bad, NO if it's a good opener."
-                try:
-                    if "YES" in llm.complete(check_prompt, temperature=0.1).upper():
-                        log.warning(f"[supervisor] Icebreaker failed secondary quality check. Forcing safe fallback.")
-                        t["icebreaker"] = f"I was researching {lead_niche} businesses in {loc} and {biz} stood out to me."
-                except Exception as e:
-                    log.error(f"[supervisor] LLM complete failed for secondary check: {e}")
+                t["linkedin_msg"] = f"Hi, I recently reviewed {biz}'s website and made a quick 45s video on how to improve its mobile conversions. Let me know if you'd like to see it."
                 
             updated_targets.append(t)
             
