@@ -361,6 +361,32 @@ def _send_reply(
                 filename="mobile_cta_fix.css",
             )
             msg.attach(attachment)
+
+            # Try to locate and attach the local .webm video
+            try:
+                from pathlib import Path
+                import re
+                slug = re.sub(r"[^a-z0-9]+", "_", biz_name.lower().strip())
+                slug = slug[:40].strip("_")
+                video_dir = Path(__file__).parent.parent / "artifacts"
+                video_path = video_dir / f"audit_{slug}.webm"
+                if video_path.exists():
+                    log.info(f"[replies] Attaching video file: {video_path.name}")
+                    with open(video_path, "rb") as f:
+                        video_payload = f.read()
+                    video_attachment = MIMEBase("video", "webm")
+                    video_attachment.set_payload(video_payload)
+                    encoders.encode_base64(video_attachment)
+                    video_attachment.add_header(
+                        "Content-Disposition",
+                        "attachment",
+                        filename=f"mobile_site_recording.webm",
+                    )
+                    msg.attach(video_attachment)
+                else:
+                    log.warning(f"[replies] No video file found at {video_path} for {biz_name}")
+            except Exception as e:
+                log.exception(f"[replies] Error attaching video to Yes email for {biz_name}: {e}")
         elif intent in ("price", "no", "question"):
             msg = MIMEMultipart("alternative")
             msg["Subject"]  = f"Re: {biz_name} mobile site"

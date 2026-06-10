@@ -515,8 +515,8 @@ def send_dossier_email(targets: list[dict]) -> bool:
     msg["Subject"] = subject
     msg["From"]    = EMAIL_FROM
     msg["To"]      = EMAIL_TO
-    msg.attach(MIMEText(text, "plain"))
-    msg.attach(MIMEText(html, "html"))
+    msg.attach(MIMEText(text, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
 
     try:
         with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as smtp:
@@ -910,8 +910,8 @@ def send_outreach_emails(
                 msg["Reply-To"] = email_from
                 if email_to:
                     msg["Bcc"] = email_to
-                msg.attach(MIMEText(plain, "plain"))
-                msg.attach(MIMEText(html,  "html"))
+                msg.attach(MIMEText(plain, "plain", "utf-8"))
+                msg.attach(MIMEText(html,  "html", "utf-8"))
 
                 try:
                     recipients = [to_email]
@@ -1222,8 +1222,8 @@ def send_video_outreach_email(
     msg["To"]       = to_email
     msg["Reply-To"] = email_from
 
-    msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(body_html, "html"))
+    msg.attach(MIMEText(plain, "plain", "utf-8"))
+    msg.attach(MIMEText(body_html, "html", "utf-8"))
 
     try:
         recipients = [to_email]
@@ -1306,7 +1306,7 @@ def process_followups():
                     msg["Reply-To"] = email_from
                     if email_to:
                         msg["Bcc"] = email_to
-                    msg.attach(MIMEText(msg_text, "plain"))
+                    msg.attach(MIMEText(msg_text, "plain", "utf-8"))
                     
                     recipients = [m["email"]]
                     if email_to:

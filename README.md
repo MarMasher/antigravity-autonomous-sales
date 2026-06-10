@@ -83,8 +83,10 @@ python orchestrator.py status
 ## Architecture
 
 ```
-daemon.py  ←  orchestrates all agents in sequence, every 24h
+daemon.py  ── orchestrates all agents in sequence, every 24h
     │
+    ├── agents/supervisor.py       (Pipeline orchestration & data hand-offs)
+    ├── agents/apify_lead_agent.py (Scale lead scraping via Apify)
     ├── agents/researcher.py       (Lead discovery + scoring)
     ├── agents/builder.py          (Live demo site generation)
     ├── agents/outreach.py         (Cold DM generation)
@@ -142,6 +144,12 @@ Copy `.env.example` to `.env` and configure:
 ---
 
 ## Agents
+
+### Supervisor
+The core orchestrator of the entire pipeline. It organizes the sequence of execution, guarantees successful state transitions between agents, and enforces email quality constraints (filtering out AI glitches, repeating text, or generic apologies).
+
+### Apify Lead Agent
+Leverages the Apify Actor API to scrape high-intent local business leads via Google Maps. It rapidly aggregates structured mapping data, bypassing local IP blocks, making it capable of pulling thousands of businesses in minutes.
 
 ### Researcher
 Sweeps `70+ niches × 150+ cities` using DuckDuckGo. Scores leads on a **two-axis system**:

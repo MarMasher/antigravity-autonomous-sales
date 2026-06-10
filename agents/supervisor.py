@@ -54,23 +54,51 @@ class SupervisorAgent(BaseAgent):
             icebreaker = t.get("icebreaker", "")
             linkedin_msg = t.get("linkedin_msg", "")
             
-            # Check for common LLM failure modes (apologies, empty, exact template leakage)
-            bad_patterns = ["language model", "AI", "I cannot", "As an", "Here is"]
-            
-            def is_bad(text):
-                # Added length constraints to prevent repetitive glitches
-                if not text or len(text) < 10 or len(text) > 150:
+            # Check for common LLM failure modes, repetitions, single-character spam, and Chinese punctuation
+            import re
+            def is_bad_content(text):
+                if not text:
                     return True
+                if len(text) < 15 or len(text) > 200: # length constraint prevents repetitive glitches
+                    return True
+                
+                text_lower = text.lower()
+                bad_patterns = ["language model", "ai ", "as an ai", "i cannot", "here is", "compliment", "icebreaker", "complimenting"]
                 for bp in bad_patterns:
-                    if bp.lower() in text.lower():
+                    if bp in text_lower:
                         return True
+                        
+                # Repetition check (words)
+                words = [w.strip(".,!?()\"' ") for w in text_lower.split() if w.strip()]
+                if not words:
+                    return True
+                for word in set(words):
+                    if len(word) > 1 and words.count(word) > 3:  # a word repeated > 3 times
+                        return True
+                        
+                # Gibberish check (many single characters)
+                single_chars = [w for w in words if len(w) == 1]
+                if len(words) > 5 and len(single_chars) / len(words) > 0.3:
+                    return True
+                    
+                # Non-standard characters/spam symbols
+                weird_symbols = ["。", "★", "☆", "■", "●", "▲", "▼"]
+                for sym in weird_symbols:
+                    if sym in text:
+                        return True
+                        
+                # Repeated symbol characters
+                for char in set(text):
+                    if char in "。._-* " and text.count(char) > 4:
+                        if char != " " and char != ".": # spaces and single periods are fine, but many symbols are not
+                            return True
                 return False
 
-            if is_bad(icebreaker):
+            if is_bad_content(icebreaker):
                 log.warning(f"[supervisor] Fixing bad icebreaker for {biz}")
                 t["icebreaker"] = f"I was researching {lead_niche} businesses in {loc} and {biz} stood out to me."
                 
-            if is_bad(linkedin_msg) or len(linkedin_msg) > 300:
+            if is_bad_content(linkedin_msg) or len(linkedin_msg) > 300:
                 log.warning(f"[supervisor] Fixing bad linkedin_msg for {biz}")
                 t["linkedin_msg"] = f"Hi, I recently reviewed {biz}'s website and made a quick 45s video on how to improve its mobile conversions. Let me know if you'd like to see it."
                 

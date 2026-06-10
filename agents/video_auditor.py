@@ -95,6 +95,14 @@ class VideoAuditorAgent(BaseAgent):
         shot_path  = ARTIFACTS_DIR / f"audit_{slug}.png"
         recorded_at = datetime.now(timezone.utc).isoformat()
 
+        # Clean up any stale files from previous attempts
+        for path in (video_path, shot_path):
+            if path.exists():
+                try:
+                    path.unlink()
+                except Exception as e:
+                    log.warning(f"[video] Failed to delete stale file {path}: {e}")
+
         try:
             from playwright.sync_api import sync_playwright
             _playwright_available = True
@@ -103,7 +111,11 @@ class VideoAuditorAgent(BaseAgent):
             log.warning("[video] Playwright not installed — falling back to screenshot mode")
 
         if _playwright_available:
-            return self._playwright_record(tid, url, video_path, shot_path, recorded_at)
+            try:
+                return self._playwright_record(tid, url, video_path, shot_path, recorded_at)
+            except Exception as exc:
+                log.warning(f"[video] Playwright failed, falling back to screenshot: {exc}")
+                return self._requests_screenshot(tid, url, shot_path, recorded_at)
         else:
             return self._requests_screenshot(tid, url, shot_path, recorded_at)
 
@@ -137,6 +149,7 @@ class VideoAuditorAgent(BaseAgent):
                 record_video_size={"width": 375, "height": 812},
             )
             page = context.new_page()
+            navigation_failed = False
 
             try:
                 # Navigate with generous timeout
@@ -169,7 +182,8 @@ class VideoAuditorAgent(BaseAgent):
                 page.screenshot(path=str(shot_path), full_page=False)
 
             except Exception as exc:
-                log.warning(f"[video] Page interaction error (continuing): {exc}")
+                log.debug(f"[video] Page interaction error: {exc}")
+                navigation_failed = True
             finally:
                 context.close()
                 browser.close()
@@ -179,9 +193,18 @@ class VideoAuditorAgent(BaseAgent):
             # and overwrites any stale file from a prior run
             raw_video = _find_newest_webm(ARTIFACTS_DIR, exclude=video_path)
             if raw_video:
-                if video_path.exists():
-                    video_path.unlink()  # remove stale target before move
-                shutil.move(str(raw_video), str(video_path))
+                if navigation_failed:
+                    try:
+                        raw_video.unlink()
+                    except Exception:
+                        pass
+                else:
+                    if video_path.exists():
+                        video_path.unlink()  # remove stale target before move
+                    shutil.move(str(raw_video), str(video_path))
+
+            if navigation_failed:
+                raise Exception("Navigation failed, falling back to screenshot.")
 
         # Determine if upload needed
         public_url = None
@@ -191,7 +214,11 @@ class VideoAuditorAgent(BaseAgent):
         if video_path.exists():
             final_path = str(video_path)
             log.info(f"[video] Uploading video to Drive (cloud-only mode)…")
-            public_url = _upload_to_drive(video_path)
+            try:
+                public_url = _upload_to_drive(video_path)
+            except Exception as e:
+                log.error(f"[video] Drive upload exception: {e}")
+                public_url = None
 
             # FIX: delete local ONLY after saving public_url — then report shot fallback path
             if public_url:
@@ -210,9 +237,20 @@ class VideoAuditorAgent(BaseAgent):
                     "fallback":    False,
                     "uploaded":    True,
                 }
+            else:
+                # If upload failed or was skipped but we HAVE the local video, return the local video!
+                log.info(f"[video] Drive upload failed/skipped. Keeping local video.")
+                return {
+                    "target_id":   tid,
+                    "path":        str(video_path),
+                    "public_url":  None,
+                    "recorded_at": recorded_at,
+                    "fallback":    False,
+                    "uploaded":    False,
+                }
 
         if shot_path.exists():
-            log.info("[video] No video recorded (or upload failed) — using screenshot fallback")
+            log.info("[video] No video recorded — using screenshot fallback")
             return {
                 "target_id":   tid,
                 "path":        str(shot_path),
@@ -221,14 +259,7 @@ class VideoAuditorAgent(BaseAgent):
                 "fallback":    True,
             }
 
-        # Video exists locally but no Drive upload — return it
-        return {
-            "target_id":   tid,
-            "path":        final_path or str(video_path),
-            "public_url":  None,
-            "recorded_at": recorded_at,
-            "fallback":    False,
-        }
+        raise Exception("No video or screenshot file was created by Playwright.")
 
     def _requests_screenshot(
         self, tid: str, url: str, shot_path: Path, recorded_at: str
